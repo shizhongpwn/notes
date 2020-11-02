@@ -140,6 +140,139 @@ TLS（Thread Local Storage）的结构与TCB（Thread Control Block）以及dtv�
 
 `TLS Blocks`分为两类，一类是装载程序的时候已经存在的（位于TCB前），这部分是`static TLS`，右边的Blocks是动态分配的，他们被使用dlopen函数在程序运行的时候动态装载的模块使用。
 
+`TCB`作为线程控制块，保存`dtv`数组的入口（看图箭头），然后`dtv`数组里面的每一项都对应着`TLS Block`的入口，其值为指针，指向`TLS Block`数据快。
+
+> `dtv`数组的第一个成员是一个计数器，每当程序使用dlopen函数或者dlfree函数记载一个具备TLS变量的module的时候，改计数器的值都会加一，从而保证了程序内版本的一致性。（图中gen）
+
+同时elf文件本身对应的`TLS Block`一定在`dtv`数组里面占据索引为1的位置，**且位置与`TCB`相邻**。
+
+图中的tp1指针（TCB上面）是因为，在i386架构上，这个指针为gs寄存器，x86_64架构上其为fs寄存器，因为该指针和ELF文件本身对应的TLS block之间的偏移是固定的，所以程序在编译的时候就可以将ELF中线程变量的地址硬编码到目标文件里面。
+
+# Glibc-TLS具体实现
+
+多线程情况下（CTF_TLS一般就考得多线程）：
+
+> [pthread_create.c](https://code.woboq.org/userspace/glibc/nptl/pthread_create.c.html)的源码，我调试使用的是glibc 2..27
+
+非主线程：
+
+* pthread_create.c的源码还是挺复杂的，但是我们边调试边看
+
+![image-20201102153208466](Glibc_TLS.assets/image-20201102153208466.png)
+
+从这里开始，执行流从pthread_create.c跳转到了allocatestack.c
+
+~~~c
+int err = ALLOCATE_STACK (iattr, &pd); //pthread.c里面的新栈分配
+~~~
+
+![image-20201102153328398](Glibc_TLS.assets/image-20201102153328398.png)
+
+这是一条`pthread_create函数`跳转到[allocate_stack](https://code.woboq.org/userspace/glibc/nptl/allocatestack.c.html#allocate_stack)函数的调用链,这个函数的注释如下：
+
+~~~c
+
+/* Get a stack frame from the cache.  We have to match by size since
+   some blocks might be too small or far too large.  */
+~~~
+
+可以看到肯定是要进行空间分配了。
+
+分配方式：通过调用函数为新线程分配栈
+
+![image-20201102201237056](Glibc_TLS.assets/image-20201102201237056.png)
+
+可以看接下来的代码：
+
+~~~c
+ pd = (struct pthread *) ((((uintptr_t) mem + size)
+                                    - TLS_TCB_SIZE)
+                                   & ~__static_tls_align_m1);
+~~~
+
+通过这个我们就知道，在分配的空间的底部形成了一个数据结构：
+
+![image-20201102211909390](Glibc_TLS.assets/image-20201102211909390.png)
+
+~~~c
+/* 进行这一步操作后内存布局如下：
+ * 
+ *                                  TLS_TCB_SIZE
+ *                                        ^
+ *                            +-----------+----------+
+ *                            |                      |
+ * ---------------------+----------------------------+
+ *                      |     |                      |
+ *                      | pad |                      |
+ *                      |     |                      |
+ * ---------------------+----------------------------+
+ *                            ^                      ^
+ *                            +                      +
+ *                           pd                mmap area end
+ *
+ */
+~~~
+
+> 从左向右看，新栈的底部被分配了一个容纳pd结构体的空间，该结构体的类型为struct pthread，我们称其为一个thread descriptor，该结构体的第一个域为tchhead_t类型，其定义如下：
+
+~~~c
+typedef struct
+{
+  void *tcb;        /* Pointer to the TCB.  Not necessarily the
+               thread descriptor used by libpthread.  */
+  dtv_t *dtv;
+  void *self;       /* Pointer to the thread descriptor.  */
+  int multiple_threads;
+  int gscope_flag;
+  uintptr_t sysinfo;
+  uintptr_t stack_guard;
+  uintptr_t pointer_guard;
+  unsigned long int vgetcpu_cache[2];
+  /* Bit 0: X86_FEATURE_1_IBT.
+     Bit 1: X86_FEATURE_1_SHSTK.
+   */
+  unsigned int feature_1;
+  int __glibc_unused1;
+  /* Reservation of some values for the TM ABI.  */
+  void *__private_tm[4];
+  /* GCC split stack support.  */
+  void *__private_ss;
+  /* The lowest address of shadow stack,  */
+  unsigned long long int ssp_base;
+  /* Must be kept even if it is no longer used by glibc since programs,
+     like AddressSanitizer, depend on the size of tcbhead_t.  */
+  __128bits __glibc_unused2[8][4] __attribute__ ((aligned (32)));
+ 
+  void *__padding[8];
+} tcbhead_t;
+
+~~~
+
+到此为止我们就可以知道，pthread会分配一个新栈给线程，然后在新栈的底部放入一个`pthread`数据结构。
+
+### 父线程TCB的继承
+
+上述栈分配完成后，在源码里先在数据结构里面填写了一些内容，
+
+![image-20201102214748179](Glibc_TLS.assets/image-20201102214748179.png)
+
+~~~c
+/* Copy the stack guard canary.  */
+#ifdef THREAD_COPY_STACK_GUARD
+  THREAD_COPY_STACK_GUARD (pd);
+#endif
+  /* Copy the pointer guard value.  */
+#ifdef THREAD_COPY_POINTER_GUARD
+  THREAD_COPY_POINTER_GUARD (pd);
+#endif
+~~~
+
+接下来就是将父进程的canary复制到当前进程的TCB结构体里面，事实上，在fs寄存器没有被改变之前，其中存放着父进程TCB的地址，可以使用`THREAD_SELF`宏来获取父线程的TCB指针。
+
+> canary是存放在pthread结构体里面的，别搞混了，可以发现在执行的前后线程pthread结构里面的`stack_guard`变成了和父进程一样。
+
+
+
 
 
 
