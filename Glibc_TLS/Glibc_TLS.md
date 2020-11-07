@@ -673,7 +673,16 @@ pointer_guard = ror (enc, 0x11, 64) ^ ptr
 evil_guard = ror (enc, 0x11, 64) ^ evil_ptr
 ~~~
 
+这就直接引申出了一个很重要的pwn攻击手法：
+
+劫持函数是因为，某个函数指针调用的时候，我们修改pointer guard使得函数指针解码过来变成了恶意代码地址。
+
 # TLS攻击
+
+> 大佬总结的攻击很多，但是我比较看重某一个点，所以研究一下非主线程的情形。
+
+* TCB的结构体在栈上，如果栈溢出足够，如`gets`，那么我们可以覆盖`tack_guard`和`pointer_guard`,同时因为`static TLS`在TCB结构体之前，所以我们可以同时覆盖一些`TLS`变量。
+* 攻击者将不需要得到leak canary的值，而是直接栈溢出足够多的数据来复写TLS中的tcbhead_t.stack_guard的值，从而bypass canary。
 
 
 
@@ -681,5 +690,7 @@ evil_guard = ror (enc, 0x11, 64) ^ evil_ptr
 >
 > http://hmarco.org/bugs/glibc_ptr_mangle_weakness.html
 
+呜呜呜，最后找到了sakura大佬的文章，爱死了
 
+> https://eternalsakura13.com/2018/04/24/starctf_babystack/
 
