@@ -315,7 +315,7 @@ dvt是一个c语言的联合类型，那么他可能是一个`counter`或者`dtv
 
 ![image-20201103092340467](Glibc_TLS.assets/image-20201103092340467.png)
 
-在tcb里面，使用`module ID`作为索引，程序装载的每一个`moudle`都会有一个`modle ID`，这个值存在于module对应的`link_map`结构体里面：
+在`dtv`里面，使用`module ID`作为索引，程序装载的每一个`moudle`都会有一个`modle ID`，这个值存在于module对应的`link_map`结构体里面：
 
 `link_map`结构体复杂的很，看大佬里文章标注了关键部分：
 
