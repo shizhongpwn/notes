@@ -84,7 +84,7 @@ struct list_entry {
 };
 ~~~
 
-它没有包含数据区域，因为你涉及思想在于数据结构包含链表节点。比如`free_area_t`
+它没有包含数据区域，因为你涉及思想在于数据结构包含链表节点。比如`free_area_t`，其头指针定义如下：
 
 ~~~c
 /* free_area_t - maintains a doubly linked list to record free (unused) pages */
@@ -93,6 +93,61 @@ typedef struct {
     unsigned int nr_free;           // # of free pages in this free list
 } free_area_t;
 ~~~
+
+空闲快链表节定义：
+
+~~~c
+/* *
+ * struct Page - Page descriptor structures. Each Page describes one
+ * physical page. In kern/mm/pmm.h, you can find lots of useful functions
+ * that convert Page to other data types, such as phyical address.
+ * */
+struct Page {
+    atomic_t ref;          // page frame's reference counter
+    ……
+    list_entry_t page_link;         // free list link
+};
+~~~
+
+自己画了一遍：
+
+![image-20201203150416494](Ucore-lab1-基础补充.assets/image-20201203150416494.png)
+
+这样我们可以让所有的数据结构共享通用的链表操作函数。
+
+> 这种链表方式带来一个很严重的问题，我们怎么获得该结构体？
+
+`le2page宏`
+
+~~~c
+#define le2page(le, member)                 \
+to_struct((le), struct Page, member)
+~~~
+
+`to_struct宏`
+
+~~~c
+/* Return the offset of 'member' relative to the beginning of a struct type */
+#define offsetof(type, member)                                      \
+((size_t)(&((type *)0)->member))
+
+/* *
+ * to_struct - get the struct from a ptr
+ * @ptr:    a struct pointer of member
+ * @type:   the type of the struct this is embedded in
+ * @member: the name of the member within the struct
+ * */
+#define to_struct(ptr, type, member)                               \
+((type *)((char *)(ptr) - offsetof(type, member)))
+~~~
+
+采用的是gcc编译器技巧：**先求的数据结构的成员变量在本宿主数据结构里面的偏移量，然后根据变量的地址反过来求得属主数据结构变量的地址。**（学到了）
+
+其中`offsetof`巧妙利用了数据偏移结构：首先将0地址强制"转换"为type数据结构（比如struct Page）的指针，再访问到type数据结构中的member成员（比如page_link）的地址，即是type数据结构中member成员相对于数据结构变量的偏移量。在offsetof宏中，这个member成员的地址（即“&((type *)0)->member)”）实际上就是type数据结构中member成员相对于数据结构变量的偏移量。
+
+那么理解了`offsetof`之后`to_struct`就很清楚了：
+
+to_struct宏正是利用这个不变的偏移量来求得链表数据项的变量地址。接下来再分析一下to_struct宏，可以发现 to_struct宏中用到的ptr变量是链表节点的地址，把它减去offsetof宏所获得的数据结构内偏移量，即就得到了包含链表节点的属主数据结构的变量的地址。
 
 
 
