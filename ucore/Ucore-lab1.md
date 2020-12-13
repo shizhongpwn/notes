@@ -831,6 +831,8 @@ ELF文件0xf000位置后面的0x1d20比特被载入内存0x0010e000（数据为�
    };
    ```
 
+   1. 第二个成员是段选择子，可以帮我们确定段地址，第一个成员和最后一个成员共同组成一个段内偏移。根据段选择子和段内偏移我们就可以找到，中断处理程序的地址。
+
 2. (gd_off_31_16 << 16) + gd_off_15_0
 
    0-15 位为偏移的低 16 位，高 16 位位于中断描述符的最高 16 位(48 - 64 位)
@@ -924,6 +926,27 @@ idt_init 函数的功能是初始化 IDT 表，IDT 表中每个元素均为门�
 且 ==T_SWITCH_TOK== 调用是用 ==T_SYSCALL== 实现的，所以这里写 ==T_SWITCH_TOK== 也行，写 ==T_SYSCALL== 也行
 
 `lidt(&idt_pd);` 加载 IDT 表，使其完成初始化
+
+`print_ticks`函数：
+
+~~~c
+/* trap_dispatch - dispatch based on what type of trap occurred */
+static void trap_dispatch(struct trapframe *tf) {
+    char c;
+    switch (tf->tf_trapno) {
+    case IRQ_OFFSET + IRQ_TIMER:
+        // 全局变量ticks定义于kern/driver/clock.c
+        ticks++;
+        if(ticks % TICK_NUM == 0)
+            print_ticks();
+        break;
+    // .........
+~~~
+
+这个不难，但是需要了解一下时钟中断：
+
+> 在Linux的0号中断是一个定时器中断。在固定的时间间隔都发生一次中断，也是说每秒发生该中断的频率都是固定的。该频率是常量HZ，该值一般是在100 ~ 1000之间。该中断的作用是为了定时更新系统日期和时间，使系统时间不断地得到跳转。另外该中断的中断处理函数除了更新系统时间外，还需要更新本地CPU统计数。指的是调用scheduler_tick递减进程的时间片，若进程的时间片递减到0，进程则被调度出去而放弃CPU使用权。
+
 
 ## 扩展训练Challenge 1:
 
