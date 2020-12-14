@@ -42,3 +42,23 @@ cont:
 finish_probe:
 ~~~
 
+这部分代码执行完成之后，从BIOS中获得的内存分布信息以结构体`e820map`的形式写入物理地址`0x8000`地址处。稍后ucore的page_init函数会访问该地址并处理所有的内存信息。
+
+* 内存容量的查看使用`INT 15h`中断。
+
+`探测系统物理内存布局`
+
+获取内存大小的方法：
+
+* `BIOS中断`
+
+  * 基于`INT 15h`中断，eax参数分别为88h e801h e820h。并非所有情况下这三种方式都可以工作。
+
+  * Linux kernel会依次尝试这三种方法，Ucore通过`e820h`中断获取内存信息，改中断必须在实模式下使用。
+
+  * > https://chyyuu.gitbooks.io/ucore_os_docs/content/lab2/lab2_3_5_probe_phymem_methods.html
+
+* `直接探测`
+
+## 链接地址
+
