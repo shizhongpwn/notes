@@ -1,4 +1,4 @@
-# Socket编程学习  一
+# Socket编程学习一
 
 >  参考https://blog.csdn.net/zjf280441589/article/details/44258027?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522159947005219724835846881%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fblog.%2522%257D&request_id=159947005219724835846881&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~blog~first_rank_v2~rank_blog_v1-12-44258027.pc_v2_rank_blog_v1&utm_term=socket&spm=1018.2118.3001.4187
 
@@ -6,7 +6,7 @@
 
 OSI(open system interconnection)开放系统互联模型是由ISO国际标准化组织定义的网络分层模型，共七层, 从下往上为:
 
-![image-20200907172232974](Socket编程学习  一.assets/image-20200907172232974.png)
+![image-20200907172232974](Socket编程学习一.assets/image-20200907172232974.png)
 
 | 物理层(Physical Layer)      | 物理层定义了所有电子及物理设备的规范，为上层的传输提供了一个物理介质，本层中数据传输的单位为比特（bit/二进制位）。属于本层定义的规范有EIA/TIA RS-232、RJ-45等，实际使用中的设备如网卡属于本层。 |
 | --------------------------- | ------------------------------------------------------------ |

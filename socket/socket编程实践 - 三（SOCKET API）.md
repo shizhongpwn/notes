@@ -91,7 +91,7 @@ backlog说明:
 
 但是两个队列长度之和不能超过backlog
 
-![image-20200908202326526](socket编程实践 - 三（SOCKET API）.assets/image-20200908202326526.png)
+![image-20200908202326526](socket编程实践-三（SOCKET API）.assets/image-20200908202326526.png)
 
 backlog推荐使用SOMAXCONN(3.13.0-44-generic中该值为128), 使用等待队列的最大值;
 
